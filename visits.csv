@@ -1,0 +1,4 @@
+Username,Date,ClockInTime,PunchInTime,ClockOutTime,Latitude,Longitude,DistanceKm,CustomerName,ProductHandling,Mobile,CollectionAmount,Remarks,RecordType
+Surya,18-08-2025,07:52:35,,,12.9716,77.5946,0,,,,0,Day Started,Clock In
+Surya,18-08-2025,,07:53:08,,12.9716,77.5946,0,Surya,Laptop,8760098358,15000,Collection,Punch In
+Surya,18-08-2025,09:41:07,,,12.9716,77.5946,0,,,,0,Day Started,Clock In
