@@ -193,10 +193,104 @@ elif st.session_state.logged_in:
         st.subheader("🟢 Clock In")
         lat, lon, gps_ok = capture_location_ui()
         if st.button("Clock In (Start Day)"):
-            row = {...}  # same row dict as before
+            row = {
+                "Username": user["username"],
+                "Date": today_str,
+                "ClockInTime": datetime.now().strftime("%H:%M:%S"),
+                "PunchInTime": "",
+                "ClockOutTime": "",
+                "Latitude": lat,
+                "Longitude": lon,
+                "DistanceKm": 0.0,
+                "CustomerName": "",
+                "ProductHandling": "",
+                "Mobile": "",
+                "CollectionAmount": 0.0,
+                "Remarks": "Day Started",
+                "RecordType": "Clock In"
+            }
             append_visit(row)
             send_location_to_api(user["username"], lat, lon, "Clock In")   # 🔥 push to API
             st.success("✅ Clock In recorded!")
+            st.rerun()
+
+    else:
+        # --- PUNCH IN ---
+        st.subheader("🔵 Punch In — Customer Visit")
+        with st.form("punch_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                cust_name = st.text_input("Customer Name", key="cust_name")
+                product_handling = st.text_input("Product Handling", value=user["product"], key="product_handling")
+                mobile = st.text_input("Mobile", key="mobile")
+            with c2:
+                collection_amount = st.number_input("Collection Amount", min_value=0.0, step=100.0, key="collection_amount")
+                remarks = st.text_input("Remarks", key="remarks")
+
+            st.markdown("**Location Capture**")
+            lat, lon, gps_ok = capture_location_ui()
+
+            submitted = st.form_submit_button("Save Punch")
+            if submitted:
+                last_loc = get_last_location_for_today(user["username"])
+                if last_loc:
+                    dist = haversine(last_loc[0], last_loc[1], lat, lon)
+                else:
+                    dist = 0.0
+
+                row = {
+                    "Username": user["username"],
+                    "Date": today_str,
+                    "ClockInTime": "",
+                    "PunchInTime": datetime.now().strftime("%H:%M:%S"),
+                    "ClockOutTime": "",
+                    "Latitude": lat,
+                    "Longitude": lon,
+                    "DistanceKm": round(dist, 2),
+                    "CustomerName": cust_name,
+                    "ProductHandling": product_handling,
+                    "Mobile": mobile,
+                    "CollectionAmount": float(collection_amount or 0.0),
+                    "Remarks": remarks,
+                    "RecordType": "Punch In"
+                }
+                append_visit(row)
+                send_location_to_api(user["username"], lat, lon, "Punch In")   # 🔥 push to API
+                reset_punch_form_state()
+                st.success("✅ Punch saved!")
+                st.rerun()
+
+        # --- CLOCK OUT ---
+        st.subheader("🔴 Clock Out")
+        lat_co, lon_co, gps_ok_co = capture_location_ui()
+        if st.button("Clock Out (End Day)"):
+            last_loc = get_last_location_for_today(user["username"])
+            dist = haversine(last_loc[0], last_loc[1], lat_co, lon_co) if last_loc else 0.0
+
+            df_today = get_today_user_df(user["username"])
+            total_km = round(df_today["DistanceKm"].astype(float).sum() + dist, 2)
+            total_visits = df_today[df_today["RecordType"] == "Punch In"].shape[0]
+            total_collection = round(df_today["CollectionAmount"].astype(float).sum(), 2)
+
+            row = {
+                "Username": user["username"],
+                "Date": today_str,
+                "ClockInTime": "",
+                "PunchInTime": "",
+                "ClockOutTime": datetime.now().strftime("%H:%M:%S"),
+                "Latitude": lat_co,
+                "Longitude": lon_co,
+                "DistanceKm": round(dist, 2),
+                "CustomerName": "",
+                "ProductHandling": "",
+                "Mobile": "",
+                "CollectionAmount": 0.0,
+                "Remarks": f"Day Ended | TotalKM={total_km} | Visits={total_visits} | Collection={total_collection}",
+                "RecordType": "Clock Out"
+            }
+            append_visit(row)
+            send_location_to_api(user["username"], lat_co, lon_co, "Clock Out")   # 🔥 push to API
+            st.success(f"✅ Clock Out recorded! Total KM: {total_km} | Visits: {total_visits} | Collection: ₹{total_collection}")
             st.rerun()
 
     # --- PUNCH IN ---
