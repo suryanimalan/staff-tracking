@@ -1,4 +1,12 @@
 Username,Date,ClockInTime,PunchInTime,ClockOutTime,Latitude,Longitude,DistanceKm,CustomerName,ProductHandling,Mobile,CollectionAmount,Remarks,RecordType
-Surya,18-08-2025,07:52:35,,,12.9716,77.5946,0,,,,0,Day Started,Clock In
-Surya,18-08-2025,,07:53:08,,12.9716,77.5946,0,Surya,Laptop,8760098358,15000,Collection,Punch In
-Surya,18-08-2025,09:41:07,,,12.9716,77.5946,0,,,,0,Day Started,Clock In
+Surya,18-08-2025,07:52:35,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In
+Surya,18-08-2025,,07:53:08,,12.9716,77.5946,0.0,Surya,Laptop,8760098358.0,15000.0,Collection,Punch In
+Surya,18-08-2025,09:41:07,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In
+babu,2025-08-18,10:35:56,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In
+babu,2025-08-18,,10:36:09,,12.9716,77.5946,0.0,,Laptop,,0.0,,Punch In
+babu,2025-08-18,,10:36:46,,12.9716,77.5946,0.0,arun,Laptop,891646485.0,25000.0,,Punch In
+babu,2025-08-18,,10:37:23,,12.9516,77.57459999999999,3.11,,Laptop,,0.0,,Punch In
+Surya,2025-08-18,10:45:15,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In
+Surya,2025-08-18,,10:46:39,,10.834134,77.5946,237.68,aas,Laptop,876005988.0,0.15,,Punch In
+Surya,2025-08-18,,10:47:04,,10.834134,78.656075,115.93,sasas,Laptop,8748488.0,150000.0,asasa,Punch In
+Surya,2025-08-18,,16:59:38,,12.831600000000003,77.57459999999999,251.36,city,ML,,2000.0,,Punch In
