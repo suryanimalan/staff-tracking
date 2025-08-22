@@ -1,12 +1,24 @@
-Username,Date,ClockInTime,PunchInTime,ClockOutTime,Latitude,Longitude,DistanceKm,CustomerName,ProductHandling,Mobile,CollectionAmount,Remarks,RecordType
-Surya,18-08-2025,07:52:35,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In
-Surya,18-08-2025,,07:53:08,,12.9716,77.5946,0.0,Surya,Laptop,8760098358.0,15000.0,Collection,Punch In
-Surya,18-08-2025,09:41:07,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In
-babu,2025-08-18,10:35:56,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In
-babu,2025-08-18,,10:36:09,,12.9716,77.5946,0.0,,Laptop,,0.0,,Punch In
-babu,2025-08-18,,10:36:46,,12.9716,77.5946,0.0,arun,Laptop,891646485.0,25000.0,,Punch In
-babu,2025-08-18,,10:37:23,,12.9516,77.57459999999999,3.11,,Laptop,,0.0,,Punch In
-Surya,2025-08-18,10:45:15,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In
-Surya,2025-08-18,,10:46:39,,10.834134,77.5946,237.68,aas,Laptop,876005988.0,0.15,,Punch In
-Surya,2025-08-18,,10:47:04,,10.834134,78.656075,115.93,sasas,Laptop,8748488.0,150000.0,asasa,Punch In
-Surya,2025-08-18,,16:59:38,,12.831600000000003,77.57459999999999,251.36,city,ML,,2000.0,,Punch In
+Username,Date,ClockInTime,PunchInTime,ClockOutTime,Latitude,Longitude,DistanceKm,CustomerName,ProductHandling,Mobile,CollectionAmount,Remarks,RecordType,0,0.1,0.2,0.3,0.4
+Surya,18-08-2025,07:52:35,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In,,,,,
+Surya,18-08-2025,,07:53:08,,12.9716,77.5946,0.0,Surya,Laptop,8760098358.0,15000.0,Collection,Punch In,,,,,
+Surya,18-08-2025,09:41:07,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In,,,,,
+babu,2025-08-18,10:35:56,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In,,,,,
+babu,2025-08-18,,10:36:09,,12.9716,77.5946,0.0,,Laptop,,0.0,,Punch In,,,,,
+babu,2025-08-18,,10:36:46,,12.9716,77.5946,0.0,arun,Laptop,891646485.0,25000.0,,Punch In,,,,,
+babu,2025-08-18,,10:37:23,,12.9516,77.57459999999999,3.11,,Laptop,,0.0,,Punch In,,,,,
+Surya,2025-08-18,10:45:15,,,12.9716,77.5946,0.0,,,,0.0,Day Started,Clock In,,,,,
+Surya,2025-08-18,,10:46:39,,10.834134,77.5946,237.68,aas,Laptop,876005988.0,0.15,,Punch In,,,,,
+Surya,2025-08-18,,10:47:04,,10.834134,78.656075,115.93,sasas,Laptop,8748488.0,150000.0,asasa,Punch In,,,,,
+Surya,2025-08-18,,16:59:38,,12.831600000000003,77.57459999999999,251.36,city,ML,,2000.0,,Punch In,,,,,
+,,,,,,,,,,,,,,Ellipsis,,,,
+,,,,,,,,,,,,,,,Ellipsis,,,
+,,,,,,,,,,,,,,,,Ellipsis,,
+,,,,,,,,,,,,,,,,,Ellipsis,
+,,,,,,,,,,,,,,,,,,Ellipsis
+Surya,2025-08-20,18:02:08,,,,,0.0,,,,0.0,Day Started,Clock In,,,,,
+Surya,2025-08-20,,,18:05:13,12.588764217038824,77.03247366900463,,,,,0.0,Day Ended | TotalKM=nan | Visits=0 | Collection=0.0,Clock Out,,,,,
+Surya,2025-08-20,,,18:05:20,10.743665884623104,77.12169335886158,205.4,,,,0.0,Day Ended | TotalKM=205.4 | Visits=0 | Collection=0.0,Clock Out,,,,,
+Surya,2025-08-20,,18:11:56,,10.832919219304546,78.68483732347458,171.03,sasa,Laptop,asasasas,0.0,,Punch In,,,,,
+Surya,2025-08-20,,,18:11:58,8.065225087366155,78.41375616862224,309.19,,,,0.0,Day Ended | TotalKM=685.62 | Visits=1 | Collection=0.0,Clock Out,,,,,
+Surya,2025-08-20,,18:37:21,,10.832919219304546,78.68483732347458,309.19,s,Laptop,,0.0,,Punch In,,,,,
+Surya,2025-08-22,06:37:21,,,10.71,78.5989,0.0,,,,0.0,Day Started,Clock In,,,,,

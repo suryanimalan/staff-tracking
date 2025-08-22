@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st 
 import pandas as pd
 import folium
 from folium.plugins import MarkerCluster
@@ -114,7 +114,7 @@ if "logged_in" not in st.session_state:
     st.session_state.user = None
 
 # ==================== SIDEBAR MENU ==================== #
-menu = st.sidebar.radio("Menu", ["Login", "Register", "Logout"])
+menu = st.sidebar.radio("Menu", ["Login", "Register", "Home", "Logout"])
 
 # ==================== REGISTER ==================== #
 if menu == "Register" and not st.session_state.logged_in:
@@ -166,142 +166,174 @@ elif st.session_state.logged_in and st.session_state.user["role"] == "admin":
         pass
 
 # ==================== STAFF DASHBOARD ==================== #
-elif st.session_state.logged_in:
+if "user" in st.session_state and st.session_state.user is not None:
     user = st.session_state.user
-    st.title(f"👋 Welcome {user['name']} — {user['branch']} — Role: {user['role']}")
+    df_today = get_today_user_df(user["username"])  # user is now safely defined
+else:
+    st.warning("Please log in first")
+    st.stop()
 
-    st.caption("📍 Location capture will use your phone's GPS. If prompted, please allow location access.")
+st.caption("📍 Location capture will use your phone's GPS. If prompted, please allow location access.")
 
-    def capture_location_ui():
-        try:
-            loc = get_geolocation()
-            if loc and "coords" in loc:
-                latitude = loc["coords"]["latitude"]
-                longitude = loc["coords"]["longitude"]
-                return latitude, longitude, True
-            else:
-                return None, None, False
-        except Exception:
-            lat, lon = random_location()
-            return lat, lon, False
+def capture_location_ui():
+    try:
+        loc = get_geolocation()
+        if loc and "coords" in loc:
+            latitude = loc["coords"]["latitude"]
+            longitude = loc["coords"]["longitude"]
+            return latitude, longitude, True
+        else:
+            return None, None, False
+    except Exception:
+        lat, lon = random_location()
+        return lat, lon, False
 
-    today_str = date.today().isoformat()
-    df_today = get_today_user_df(user["username"])
+today_str = date.today().isoformat()
+df_today = get_today_user_df(user["username"])
 
-    # --- CLOCK IN ---
-    if df_today[df_today["RecordType"] == "Clock In"].empty:
-        st.subheader("🟢 Clock In")
+# --- CLOCK IN ---
+if df_today[df_today["RecordType"] == "Clock In"].empty:
+    st.subheader("🟢 Clock In")
+    lat, lon, gps_ok = capture_location_ui()
+    if st.button("Clock In (Start Day)"):
+        row = {
+            "Username": user["username"],
+            "Date": today_str,
+            "ClockInTime": datetime.now().strftime("%H:%M:%S"),
+            "PunchInTime": "",
+            "ClockOutTime": "",
+            "Latitude": lat,
+            "Longitude": lon,
+            "DistanceKm": 0.0,
+            "CustomerName": "",
+            "ProductHandling": "",
+            "Mobile": "",
+            "CollectionAmount": 0.0,
+            "Remarks": "Day Started",
+            "RecordType": "Clock In"
+        }
+        append_visit(row)
+        send_location_to_api(user["username"], lat, lon, "Clock In")   # 🔥 push to API
+        st.success("✅ Clock In recorded!")
+        st.rerun()
+
+else:
+    # --- PUNCH IN ---
+    st.subheader("🔵 Punch In — Customer Visit")
+    with st.form("punch_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            cust_name = st.text_input("Customer Name", key="cust_name")
+            product_handling = st.text_input("Product Handling", value=user["product"], key="product_handling")
+            mobile = st.text_input("Mobile", key="mobile")
+        with c2:
+            collection_amount = st.number_input("Collection Amount", min_value=0.0, step=100.0, key="collection_amount")
+            remarks = st.text_input("Remarks", key="remarks")
+
+        st.markdown("**Location Capture**")
         lat, lon, gps_ok = capture_location_ui()
-        if st.button("Clock In (Start Day)"):
-            row = {
-                "Username": user["username"],
-                "Date": today_str,
-                "ClockInTime": datetime.now().strftime("%H:%M:%S"),
-                "PunchInTime": "",
-                "ClockOutTime": "",
-                "Latitude": lat,
-                "Longitude": lon,
-                "DistanceKm": 0.0,
-                "CustomerName": "",
-                "ProductHandling": "",
-                "Mobile": "",
-                "CollectionAmount": 0.0,
-                "Remarks": "Day Started",
-                "RecordType": "Clock In"
-            }
-            append_visit(row)
-            send_location_to_api(user["username"], lat, lon, "Clock In")   # 🔥 push to API
-            st.success("✅ Clock In recorded!")
-            st.rerun()
 
-    else:
-        # --- PUNCH IN ---
-        st.subheader("🔵 Punch In — Customer Visit")
-        with st.form("punch_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                cust_name = st.text_input("Customer Name", key="cust_name")
-                product_handling = st.text_input("Product Handling", value=user["product"], key="product_handling")
-                mobile = st.text_input("Mobile", key="mobile")
-            with c2:
-                collection_amount = st.number_input("Collection Amount", min_value=0.0, step=100.0, key="collection_amount")
-                remarks = st.text_input("Remarks", key="remarks")
-
-            st.markdown("**Location Capture**")
-            lat, lon, gps_ok = capture_location_ui()
-
-            submitted = st.form_submit_button("Save Punch")
-            if submitted:
-                last_loc = get_last_location_for_today(user["username"])
-                if last_loc:
-                    dist = haversine(last_loc[0], last_loc[1], lat, lon)
-                else:
-                    dist = 0.0
-
-                row = {
-                    "Username": user["username"],
-                    "Date": today_str,
-                    "ClockInTime": "",
-                    "PunchInTime": datetime.now().strftime("%H:%M:%S"),
-                    "ClockOutTime": "",
-                    "Latitude": lat,
-                    "Longitude": lon,
-                    "DistanceKm": round(dist, 2),
-                    "CustomerName": cust_name,
-                    "ProductHandling": product_handling,
-                    "Mobile": mobile,
-                    "CollectionAmount": float(collection_amount or 0.0),
-                    "Remarks": remarks,
-                    "RecordType": "Punch In"
-                }
-                append_visit(row)
-                send_location_to_api(user["username"], lat, lon, "Punch In")   # 🔥 push to API
-                reset_punch_form_state()
-                st.success("✅ Punch saved!")
-                st.rerun()
-
-        # --- CLOCK OUT ---
-        st.subheader("🔴 Clock Out")
-        lat_co, lon_co, gps_ok_co = capture_location_ui()
-        if st.button("Clock Out (End Day)"):
+        submitted = st.form_submit_button("Save Punch")
+        if submitted:
             last_loc = get_last_location_for_today(user["username"])
-            dist = haversine(last_loc[0], last_loc[1], lat_co, lon_co) if last_loc else 0.0
-
-            df_today = get_today_user_df(user["username"])
-            total_km = round(df_today["DistanceKm"].astype(float).sum() + dist, 2)
-            total_visits = df_today[df_today["RecordType"] == "Punch In"].shape[0]
-            total_collection = round(df_today["CollectionAmount"].astype(float).sum(), 2)
+            dist = haversine(last_loc[0], last_loc[1], lat, lon) if last_loc else 0.0
 
             row = {
                 "Username": user["username"],
                 "Date": today_str,
                 "ClockInTime": "",
-                "PunchInTime": "",
-                "ClockOutTime": datetime.now().strftime("%H:%M:%S"),
-                "Latitude": lat_co,
-                "Longitude": lon_co,
+                "PunchInTime": datetime.now().strftime("%H:%M:%S"),
+                "ClockOutTime": "",
+                "Latitude": lat,
+                "Longitude": lon,
                 "DistanceKm": round(dist, 2),
-                "CustomerName": "",
-                "ProductHandling": "",
-                "Mobile": "",
-                "CollectionAmount": 0.0,
-                "Remarks": f"Day Ended | TotalKM={total_km} | Visits={total_visits} | Collection={total_collection}",
-                "RecordType": "Clock Out"
+                "CustomerName": cust_name,
+                "ProductHandling": product_handling,
+                "Mobile": mobile,
+                "CollectionAmount": float(collection_amount or 0.0),
+                "Remarks": remarks,
+                "RecordType": "Punch In"
             }
             append_visit(row)
-            send_location_to_api(user["username"], lat_co, lon_co, "Clock Out")   # 🔥 push to API
-            st.success(f"✅ Clock Out recorded! Total KM: {total_km} | Visits: {total_visits} | Collection: ₹{total_collection}")
+            send_location_to_api(user["username"], lat, lon, "Punch In")   # 🔥 push to API
+            reset_punch_form_state()
+            st.success("✅ Punch saved!")
             st.rerun()
 
-    # --- PUNCH IN ---
-    # inside form after append_visit(row):
-    # send_location_to_api(user["username"], lat, lon, "Punch In")
-
     # --- CLOCK OUT ---
-    # after append_visit(row):
-    # send_location_to_api(user["username"], lat_co, lon_co, "Clock Out")
+    st.subheader("🔴 Clock Out")
+    lat_co, lon_co, gps_ok_co = capture_location_ui()
+    if st.button("Clock Out (End Day)"):
+        last_loc = get_last_location_for_today(user["username"])
+        dist = haversine(last_loc[0], last_loc[1], lat_co, lon_co) if last_loc else 0.0
+
+        df_today = get_today_user_df(user["username"])
+        total_km = round(df_today["DistanceKm"].astype(float).sum() + dist, 2)
+        total_visits = df_today[df_today["RecordType"] == "Punch In"].shape[0]
+        total_collection = round(df_today["CollectionAmount"].astype(float).sum(), 2)
+
+        row = {
+            "Username": user["username"],
+            "Date": today_str,
+            "ClockInTime": "",
+            "PunchInTime": "",
+            "ClockOutTime": datetime.now().strftime("%H:%M:%S"),
+            "Latitude": lat_co,
+            "Longitude": lon_co,
+            "DistanceKm": round(dist, 2),
+            "CustomerName": "",
+            "ProductHandling": "",
+            "Mobile": "",
+            "CollectionAmount": 0.0,
+            "Remarks": f"Day Ended | TotalKM={total_km} | Visits={total_visits} | Collection={total_collection}",
+            "RecordType": "Clock Out"
+        }
+        append_visit(row)
+        send_location_to_api(user["username"], lat_co, lon_co, "Clock Out")   # 🔥 push to API also
+        st.success(f"✅ Clock Out recorded! Total KM: {total_km} | Visits: {total_visits} | Collection: ₹{total_collection}")
+        st.rerun()
+
+# ---------- TODAY VIEW (MAP + TABLE + METRICS) ----------
+df_today = get_today_user_df(user["username"])
+if not df_today.empty:
+    st.subheader("📋 Today's Log")
+    st.dataframe(df_today, use_container_width=True)
+
+    st.subheader("🗺️ Route Map")
+    lat_mean = df_today["Latitude"].dropna().astype(float).mean()
+    lon_mean = df_today["Longitude"].dropna().astype(float).mean()
+    m = folium.Map(location=[lat_mean, lon_mean], zoom_start=7)
+    marker_cluster = MarkerCluster().add_to(m)
+
+    df_points = df_today.copy()
+df_points = df_points.dropna(subset=["Latitude", "Longitude"])  # drop NaNs
+df_points = df_points[(df_points["Latitude"] != "") & (df_points["Longitude"] != "")]  # drop empty strings
+
+# Convert to float safely
+df_points["Latitude"] = df_points["Latitude"].astype(float)
+df_points["Longitude"] = df_points["Longitude"].astype(float)
+
+# Create points list
+points = [[lat, lon] for lat, lon in zip(df_points["Latitude"], df_points["Longitude"])]
+
+# Only draw PolyLine if there are at least 2 valid points
+if len(points) > 1:
+    folium.PolyLine(points, color="red", weight=3, opacity=0.7,
+                    tooltip=f"Route of {user['name']}").add_to(m)
+
+# Add markers for all valid points
+for _, r in df_points.iterrows():
+    folium.Marker(
+        location=[r["Latitude"], r["Longitude"]],
+        popup=f"{r['RecordType']} at {r['PunchInTime'] or r['ClockInTime'] or r['ClockOutTime']}",
+        icon=folium.Icon(color="blue", icon="user")
+    ).add_to(marker_cluster)
+
+    st_folium(m, width=1000, height=520)
 
 # ==================== LOGOUT ==================== #
+if menu == "Home":
+    st.write("Welcome Home")
 elif menu == "Logout":
     st.session_state.logged_in = False
     st.session_state.user = None
