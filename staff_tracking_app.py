@@ -289,118 +289,142 @@ if role == "admin":
 
 
 # ==================== STAFF DASHBOARD ====================
-if st.session_state.get("show_dashboard") and role == "staff":
-    st.title("🧑‍💼 Staff Dashboard")
-    st.info(f"Welcome {user['name']}!")
+if st.session_state.get("logged_in") and st.session_state.get("user") is not None:
+    user = st.session_state.user
+    role = user["role"]
 
-    username = user["username"]
-    today_str = date.today().isoformat()
-    today_df = get_today_user_df(username)
+    if role == "staff":
+        st.title("🧑‍💼 Staff Dashboard")
+        st.info(f"Welcome {user['name']}!")
 
-    # Clock In
-    if st.button("Clock In"):
-        if not today_df.empty and today_df.iloc[-1]["ClockInTime"]:
-            st.warning("⏰ Already Clocked In today")
-        else:
-            lat, lon = random_location() if not GEO_AVAILABLE else get_geolocation()
-            row = {
-                "Username": username,
-                "Date": today_str,
-                "ClockInTime": datetime.now().strftime("%H:%M:%S"),
-                "PunchInTime": "",
-                "ClockOutTime": "",
-                "Latitude": lat,
-                "Longitude": lon,
-                "DistanceKm": 0,
-                "CustomerName": "",
-                "ProductHandling": "",
-                "Mobile": "",
-                "CollectionAmount": 0,
-                "Remarks": "",
-                "RecordType": "ClockIn"
-            }
-            append_visit(row)
-            send_location_to_api(username, lat, lon, "ClockIn")
-            st.success("✅ Clocked In Successfully")
+        username = user["username"]
+        today_str = date.today().isoformat()
+        today_df = get_today_user_df(username)
 
-    # Punch In
-    st.subheader("Punch In / Customer Visit")
-    cust_name = st.text_input("Customer Name", key="cust_name")
-    product_handling = st.text_input("Product Handling", key="product_handling")
-    mobile = st.text_input("Mobile", key="mobile")
-    collection_amount = st.number_input("Collection Amount", key="collection_amount", min_value=0)
-    remarks = st.text_area("Remarks", key="remarks")
+        # ---------------- LOCATION FUNCTION ----------------
+        def get_current_location():
+            if GEO_AVAILABLE:
+                try:
+                    loc = get_geolocation()
+                    if loc and "lat" in loc and "lon" in loc:
+                        return loc["lat"], loc["lon"]
+                    else:
+                        st.warning("⚠️ GPS data not available, using fallback location.")
+                except Exception as e:
+                    st.warning(f"⚠️ Error getting GPS: {e}")
+            return random_location()  # fallback
 
-    if st.button("Punch In Visit"):
-        lat, lon = random_location() if not GEO_AVAILABLE else get_geolocation()
-        row = {
-            "Username": username,
-            "Date": today_str,
-            "ClockInTime": today_df.iloc[-1]["ClockInTime"] if not today_df.empty else "",
-            "PunchInTime": datetime.now().strftime("%H:%M:%S"),
-            "ClockOutTime": "",
-            "Latitude": lat,
-            "Longitude": lon,
-            "DistanceKm": 0,
-            "CustomerName": cust_name,
-            "ProductHandling": product_handling,
-            "Mobile": mobile,
-            "CollectionAmount": collection_amount,
-            "Remarks": remarks,
-            "RecordType": "PunchIn"
-        }
-        append_visit(row)
-        send_location_to_api(username, lat, lon, "PunchIn")
-        st.success("✅ Punch In Recorded")
-        reset_punch_form_state()
+        # ---------------- CLOCK IN ----------------
+        if st.button("Clock In", key="staff_clockin"):
+            if not today_df.empty and today_df.iloc[-1]["ClockInTime"]:
+                st.warning("⏰ Already Clocked In today")
+            else:
+                lat, lon = get_current_location()
+                row = {
+                    "Username": username,
+                    "Date": today_str,
+                    "ClockInTime": datetime.now().strftime("%H:%M:%S"),
+                    "PunchInTime": "",
+                    "ClockOutTime": "",
+                    "Latitude": lat,
+                    "Longitude": lon,
+                    "DistanceKm": 0,
+                    "CustomerName": "",
+                    "ProductHandling": "",
+                    "Mobile": "",
+                    "CollectionAmount": 0,
+                    "Remarks": "",
+                    "RecordType": "ClockIn"
+                }
+                append_visit(row)
+                send_location_to_api(username, lat, lon, "ClockIn")
+                st.success("✅ Clocked In Successfully")
+                today_df = get_today_user_df(username)  # refresh
 
-    # Clock Out
-    if st.button("Clock Out"):
-        if today_df.empty or today_df.iloc[-1]["ClockOutTime"]:
-            st.warning("⏰ Already Clocked Out today")
-        else:
-            lat, lon = random_location() if not GEO_AVAILABLE else get_geolocation()
+        # ---------------- PUNCH IN ----------------
+        st.subheader("Punch In / Customer Visit")
+        cust_name = st.text_input("Customer Name", key="staff_cust_name")
+        product_handling = st.text_input("Product Handling", key="staff_product")
+        mobile = st.text_input("Mobile", key="staff_mobile")
+        collection_amount = st.number_input("Collection Amount", key="staff_collection", min_value=0)
+        remarks = st.text_area("Remarks", key="staff_remarks")
+
+        if st.button("Punch In Visit", key="staff_punchin"):
+            lat, lon = get_current_location()
             row = {
                 "Username": username,
                 "Date": today_str,
                 "ClockInTime": today_df.iloc[-1]["ClockInTime"] if not today_df.empty else "",
-                "PunchInTime": today_df.iloc[-1]["PunchInTime"] if not today_df.empty else "",
-                "ClockOutTime": datetime.now().strftime("%H:%M:%S"),
+                "PunchInTime": datetime.now().strftime("%H:%M:%S"),
+                "ClockOutTime": "",
                 "Latitude": lat,
                 "Longitude": lon,
                 "DistanceKm": 0,
-                "CustomerName": "",
-                "ProductHandling": "",
-                "Mobile": "",
-                "CollectionAmount": 0,
-                "Remarks": "",
-                "RecordType": "ClockOut"
+                "CustomerName": cust_name,
+                "ProductHandling": product_handling,
+                "Mobile": mobile,
+                "CollectionAmount": collection_amount,
+                "Remarks": remarks,
+                "RecordType": "PunchIn"
             }
             append_visit(row)
-            send_location_to_api(username, lat, lon, "ClockOut")
-            st.success("✅ Clocked Out Successfully")
+            send_location_to_api(username, lat, lon, "PunchIn")
+            st.success("✅ Punch In Recorded")
+            # Reset input fields
+            for k in ["staff_cust_name", "staff_product", "staff_mobile", "staff_collection", "staff_remarks"]:
+                if k in st.session_state:
+                    del st.session_state[k]
+            today_df = get_today_user_df(username)  # refresh
 
-    # Today's Travel Map
-    st.subheader("🗺️ Today's Travel Map")
-    today_map_df = get_today_user_df(username).dropna(subset=["Latitude","Longitude"])
-    if not today_map_df.empty:
-        lat_mean = today_map_df["Latitude"].mean()
-        lon_mean = today_map_df["Longitude"].mean()
-        m = folium.Map(location=[lat_mean, lon_mean], zoom_start=12)
+        # ---------------- CLOCK OUT ----------------
+        if st.button("Clock Out", key="staff_clockout"):
+            if today_df.empty or today_df.iloc[-1]["ClockOutTime"]:
+                st.warning("⏰ Already Clocked Out today")
+            else:
+                lat, lon = get_current_location()
+                row = {
+                    "Username": username,
+                    "Date": today_str,
+                    "ClockInTime": today_df.iloc[-1]["ClockInTime"] if not today_df.empty else "",
+                    "PunchInTime": today_df.iloc[-1]["PunchInTime"] if not today_df.empty else "",
+                    "ClockOutTime": datetime.now().strftime("%H:%M:%S"),
+                    "Latitude": lat,
+                    "Longitude": lon,
+                    "DistanceKm": 0,
+                    "CustomerName": "",
+                    "ProductHandling": "",
+                    "Mobile": "",
+                    "CollectionAmount": 0,
+                    "Remarks": "",
+                    "RecordType": "ClockOut"
+                }
+                append_visit(row)
+                send_location_to_api(username, lat, lon, "ClockOut")
+                st.success("✅ Clocked Out Successfully")
+                today_df = get_today_user_df(username)  # refresh
 
-        coords = list(zip(today_map_df["Latitude"], today_map_df["Longitude"]))
-        for _, row in today_map_df.iterrows():
-            popup_txt = []
-            if "CustomerName" in row: popup_txt.append(str(row["CustomerName"]))
-            folium.CircleMarker(
-                location=[row["Latitude"], row["Longitude"]],
-                radius=5, color="blue", fill=True, fill_color="blue",
-                popup="<br>".join(popup_txt)
-            ).add_to(m)
+        # ---------------- TODAY'S TRAVEL MAP ----------------
+        st.subheader("🗺️ Today's Travel Map")
+        today_map_df = get_today_user_df(username).dropna(subset=["Latitude","Longitude"])
+        if not today_map_df.empty:
+            lat_mean = today_map_df["Latitude"].mean()
+            lon_mean = today_map_df["Longitude"].mean()
+            m = folium.Map(location=[lat_mean, lon_mean], zoom_start=12)
 
-        if len(coords) > 1:
-            folium.PolyLine(coords, color="red", weight=3, opacity=0.7).add_to(m)
+            coords = list(zip(today_map_df["Latitude"], today_map_df["Longitude"]))
+            for _, row in today_map_df.iterrows():
+                popup_txt = []
+                if "CustomerName" in row and row["CustomerName"]:
+                    popup_txt.append(str(row["CustomerName"]))
+                folium.CircleMarker(
+                    location=[row["Latitude"], row["Longitude"]],
+                    radius=5, color="blue", fill=True, fill_color="blue",
+                    popup="<br>".join(popup_txt)
+                ).add_to(m)
 
-        st_folium(m, width=700, height=500)
-    else:
-        st.warning("⚠️ No location data for today yet")
+            if len(coords) > 1:
+                folium.PolyLine(coords, color="red", weight=3, opacity=0.7).add_to(m)
+
+            st_folium(m, width=700, height=500)
+        else:
+            st.warning("⚠️ No location data for today yet")
