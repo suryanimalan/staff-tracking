@@ -1,4 +1,4 @@
-import streamlit as st 
+import streamlit as st  
 import pandas as pd
 import folium
 from folium.plugins import MarkerCluster
@@ -156,185 +156,109 @@ elif menu == "Login" and not st.session_state.logged_in:
             st.error("❌ Invalid username or password")
 
 # ==================== ADMIN DASHBOARD ==================== #
-elif st.session_state.logged_in and st.session_state.user["role"] == "admin":
-    st.title("📊 Admin Dashboard")
-    df = load_visits()
-    if df.empty:
-        st.info("No staff activity logged yet.")
-    else:
-        # filters + metrics + map (same as before) ...
-        pass
-
-# ==================== STAFF DASHBOARD ==================== #
 if "user" in st.session_state and st.session_state.user is not None:
     user = st.session_state.user
-    df_today = get_today_user_df(user["username"])  # user is now safely defined
+    role = user["role"]
 else:
-    st.warning("Please log in first")
-    st.stop()
+    role = None
 
-st.caption("📍 Location capture will use your phone's GPS. If prompted, please allow location access.")
+if role == "admin":   # match how you saved role in registration
+    st.title("📊 Admin Dashboard")
+    st.info("View all staff visits with filters, summary, charts & map")
 
-def capture_location_ui():
+    # ---------------- LOAD DATA ----------------
     try:
-        loc = get_geolocation()
-        if loc and "coords" in loc:
-            latitude = loc["coords"]["latitude"]
-            longitude = loc["coords"]["longitude"]
-            return latitude, longitude, True
+        df = pd.read_csv("staff_tracking.csv")
+    except FileNotFoundError:
+        st.error("❌ staff_tracking.csv not found!")
+        st.stop()
+
+    # Clean column names (lowercase, strip spaces)
+    df.rename(columns=lambda x: str(x).strip().lower(), inplace=True)
+
+    # Ensure date column is datetime
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+    # ---------------- FILTERS ----------------
+    dm_filter = st.selectbox("Select DM", ["All"] + sorted(df["dm"].dropna().unique().tolist() if "dm" in df else []))
+    branch_filter = st.selectbox("Select Branch", ["All"] + sorted(df["branch"].dropna().unique().tolist() if "branch" in df else []))
+    product_filter = st.selectbox("Select Product", ["All"] + sorted(df["product"].dropna().unique().tolist() if "product" in df else []))
+    date_range = st.date_input("Select Date Range", [])
+
+    filtered = df.copy()
+    if dm_filter != "All" and "dm" in df:
+        filtered = filtered[filtered["dm"] == dm_filter]
+    if branch_filter != "All" and "branch" in df:
+        filtered = filtered[filtered["branch"] == branch_filter]
+    if product_filter != "All" and "product" in df:
+        filtered = filtered[filtered["product"] == product_filter]
+    if len(date_range) == 2:
+        start, end = date_range
+        filtered = filtered[(filtered["date"] >= pd.to_datetime(start)) & (filtered["date"] <= pd.to_datetime(end))]
+
+    # ---------------- SUMMARY ----------------
+    total_visits = len(filtered)
+
+    if "collectionamount" in filtered:
+        total_collection = filtered["collectionamount"].sum()
+        avg_collection = filtered["collectionamount"].mean() if total_visits > 0 else 0
+    else:
+        total_collection = 0
+        avg_collection = 0
+
+    st.metric("Total Visits", total_visits)
+    st.metric("Total Collection", f"₹{total_collection:,.2f}")
+    st.metric("Avg Collection", f"₹{avg_collection:,.2f}")
+
+    # ---------------- TABLE ----------------
+    st.subheader("📋 Staff Visit Records")
+    st.dataframe(filtered)
+
+    # ---------------- CHARTS ----------------
+    if not filtered.empty:
+        st.subheader("📈 Charts")
+
+        if "dm" in filtered and "collectionamount" in filtered:
+            st.bar_chart(filtered.groupby("dm")["collectionamount"].sum())
+
+        if "branch" in filtered and "collectionamount" in filtered:
+            st.bar_chart(filtered.groupby("branch")["collectionamount"].sum())
+
+        if "product" in filtered and "collectionamount" in filtered:
+            st.bar_chart(filtered.groupby("product")["collectionamount"].sum())
+    else:
+        st.warning("⚠️ No data available for charts")
+
+    # ---------------- MAP ----------------
+    st.subheader("🗺️ Visit Map")
+
+    if "latitude" in filtered and "longitude" in filtered:
+        map_data = filtered.dropna(subset=["latitude", "longitude"])
+
+        if not map_data.empty:
+            lat_mean = map_data["latitude"].mean()
+            lon_mean = map_data["longitude"].mean()
+
+            if pd.isna(lat_mean) or pd.isna(lon_mean):
+                lat_mean, lon_mean = 11.0, 78.0
+
+            m = folium.Map(location=[lat_mean, lon_mean], zoom_start=7)
+
+            for _, row in map_data.iterrows():
+                popup_txt = []
+                if "customername" in row:
+                    popup_txt.append(str(row["customername"]))
+                if "branch" in row:
+                    popup_txt.append(f"({row['branch']})")
+                if "product" in row and "collectionamount" in row:
+                    popup_txt.append(f"{row['product']} - ₹{row['collectionamount']}")
+
+                folium.Marker(
+                    [row["latitude"], row["longitude"]],
+                    popup="<br>".join(popup_txt)
+                ).add_to(m)
+
+            st_folium(m, width=700, height=500)
         else:
-            return None, None, False
-    except Exception:
-        lat, lon = random_location()
-        return lat, lon, False
-
-today_str = date.today().isoformat()
-df_today = get_today_user_df(user["username"])
-
-# --- CLOCK IN ---
-if df_today[df_today["RecordType"] == "Clock In"].empty:
-    st.subheader("🟢 Clock In")
-    lat, lon, gps_ok = capture_location_ui()
-    if st.button("Clock In (Start Day)"):
-        row = {
-            "Username": user["username"],
-            "Date": today_str,
-            "ClockInTime": datetime.now().strftime("%H:%M:%S"),
-            "PunchInTime": "",
-            "ClockOutTime": "",
-            "Latitude": lat,
-            "Longitude": lon,
-            "DistanceKm": 0.0,
-            "CustomerName": "",
-            "ProductHandling": "",
-            "Mobile": "",
-            "CollectionAmount": 0.0,
-            "Remarks": "Day Started",
-            "RecordType": "Clock In"
-        }
-        append_visit(row)
-        send_location_to_api(user["username"], lat, lon, "Clock In")   # 🔥 push to API
-        st.success("✅ Clock In recorded!")
-        st.rerun()
-
-else:
-    # --- PUNCH IN ---
-    st.subheader("🔵 Punch In — Customer Visit")
-    with st.form("punch_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            cust_name = st.text_input("Customer Name", key="cust_name")
-            product_handling = st.text_input("Product Handling", value=user["product"], key="product_handling")
-            mobile = st.text_input("Mobile", key="mobile")
-        with c2:
-            collection_amount = st.number_input("Collection Amount", min_value=0.0, step=100.0, key="collection_amount")
-            remarks = st.text_input("Remarks", key="remarks")
-
-        st.markdown("**Location Capture**")
-        lat, lon, gps_ok = capture_location_ui()
-
-        submitted = st.form_submit_button("Save Punch")
-        if submitted:
-            last_loc = get_last_location_for_today(user["username"])
-            dist = haversine(last_loc[0], last_loc[1], lat, lon) if last_loc else 0.0
-
-            row = {
-                "Username": user["username"],
-                "Date": today_str,
-                "ClockInTime": "",
-                "PunchInTime": datetime.now().strftime("%H:%M:%S"),
-                "ClockOutTime": "",
-                "Latitude": lat,
-                "Longitude": lon,
-                "DistanceKm": round(dist, 2),
-                "CustomerName": cust_name,
-                "ProductHandling": product_handling,
-                "Mobile": mobile,
-                "CollectionAmount": float(collection_amount or 0.0),
-                "Remarks": remarks,
-                "RecordType": "Punch In"
-            }
-            append_visit(row)
-            send_location_to_api(user["username"], lat, lon, "Punch In")   # 🔥 push to API
-            reset_punch_form_state()
-            st.success("✅ Punch saved!")
-            st.rerun()
-
-    # --- CLOCK OUT ---
-    st.subheader("🔴 Clock Out")
-    lat_co, lon_co, gps_ok_co = capture_location_ui()
-    if st.button("Clock Out (End Day)"):
-        last_loc = get_last_location_for_today(user["username"])
-        dist = haversine(last_loc[0], last_loc[1], lat_co, lon_co) if last_loc else 0.0
-
-        df_today = get_today_user_df(user["username"])
-        total_km = round(df_today["DistanceKm"].astype(float).sum() + dist, 2)
-        total_visits = df_today[df_today["RecordType"] == "Punch In"].shape[0]
-        total_collection = round(df_today["CollectionAmount"].astype(float).sum(), 2)
-
-        row = {
-            "Username": user["username"],
-            "Date": today_str,
-            "ClockInTime": "",
-            "PunchInTime": "",
-            "ClockOutTime": datetime.now().strftime("%H:%M:%S"),
-            "Latitude": lat_co,
-            "Longitude": lon_co,
-            "DistanceKm": round(dist, 2),
-            "CustomerName": "",
-            "ProductHandling": "",
-            "Mobile": "",
-            "CollectionAmount": 0.0,
-            "Remarks": f"Day Ended | TotalKM={total_km} | Visits={total_visits} | Collection={total_collection}",
-            "RecordType": "Clock Out"
-        }
-        append_visit(row)
-        send_location_to_api(user["username"], lat_co, lon_co, "Clock Out")   # 🔥 push to API also
-        st.success(f"✅ Clock Out recorded! Total KM: {total_km} | Visits: {total_visits} | Collection: ₹{total_collection}")
-        st.rerun()
-
-# ---------- TODAY VIEW (MAP + TABLE + METRICS) ----------
-df_today = get_today_user_df(user["username"])
-if not df_today.empty:
-    st.subheader("📋 Today's Log")
-    st.dataframe(df_today, use_container_width=True)
-
-    st.subheader("🗺️ Route Map")
-    lat_mean = df_today["Latitude"].dropna().astype(float).mean()
-    lon_mean = df_today["Longitude"].dropna().astype(float).mean()
-    m = folium.Map(location=[lat_mean, lon_mean], zoom_start=7)
-    marker_cluster = MarkerCluster().add_to(m)
-
-    df_points = df_today.copy()
-df_points = df_points.dropna(subset=["Latitude", "Longitude"])  # drop NaNs
-df_points = df_points[(df_points["Latitude"] != "") & (df_points["Longitude"] != "")]  # drop empty strings
-
-# Convert to float safely
-df_points["Latitude"] = df_points["Latitude"].astype(float)
-df_points["Longitude"] = df_points["Longitude"].astype(float)
-
-# Create points list
-points = [[lat, lon] for lat, lon in zip(df_points["Latitude"], df_points["Longitude"])]
-
-# Only draw PolyLine if there are at least 2 valid points
-if len(points) > 1:
-    folium.PolyLine(points, color="red", weight=3, opacity=0.7,
-                    tooltip=f"Route of {user['name']}").add_to(m)
-
-# Add markers for all valid points
-for _, r in df_points.iterrows():
-    folium.Marker(
-        location=[r["Latitude"], r["Longitude"]],
-        popup=f"{r['RecordType']} at {r['PunchInTime'] or r['ClockInTime'] or r['ClockOutTime']}",
-        icon=folium.Icon(color="blue", icon="user")
-    ).add_to(marker_cluster)
-
-    st_folium(m, width=1000, height=520)
-
-# ==================== LOGOUT ==================== #
-if menu == "Home":
-    st.write("Welcome Home")
-elif menu == "Logout":
-    st.session_state.logged_in = False
-    st.session_state.user = None
-    st.success("✅ Logged out successfully")
+            st.warning("⚠️ No valid coordinates found for selected filters")
