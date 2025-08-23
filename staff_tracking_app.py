@@ -1,28 +1,29 @@
-import streamlit as st 
+import streamlit as st
 import pandas as pd
 import folium
 from folium.plugins import MarkerCluster
-from streamlit_js_eval import get_geolocation
 from streamlit_folium import st_folium
 from datetime import datetime, date
 import random
 import math
 import hashlib
 import os
+import requests   # 🔥 added for API push
 
 # Try geolocation package (real GPS). If missing, fallback to manual input.
 try:
-    from streamlit_geolocation import geolocation
+    from streamlit_js_eval import get_geolocation
     GEO_AVAILABLE = True
 except Exception:
     GEO_AVAILABLE = False
 
-# ==================== CONFIG ==================== #
-st.set_page_config(page_title="Staff Tracker", layout="wide")
+# ==================== CONFIG ====================
+# st.set_page_config(page_title="Staff Tracker", layout="wide")
 USER_FILE = "users.csv"
 VISITS_FILE = "visits.csv"
+API_URL = "http://127.0.0.1:8000/send_location"  # 🔥 your FastAPI endpoint
 
-# ==================== UTIL / INIT ==================== #
+# ==================== UTIL / INIT ====================
 def ensure_files():
     if not os.path.exists(USER_FILE):
         pd.DataFrame(columns=["name", "username", "password", "dm", "branch", "product", "role"]).to_csv(USER_FILE, index=False)
@@ -61,6 +62,18 @@ def append_visit(row_dict):
     df = pd.concat([df, pd.DataFrame([row_dict])], ignore_index=True)
     df.to_csv(VISITS_FILE, index=False)
 
+def send_location_to_api(username, lat, lon, record_type):
+    try:
+        requests.post(API_URL, json={
+            "username": username,
+            "latitude": lat,
+            "longitude": lon,
+            "record_type": record_type,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        st.warning(f"⚠️ Could not sync to API: {e}")
+
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -68,18 +81,6 @@ def haversine(lat1, lon1, lat2, lon2):
     dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
     return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
-
-def get_last_location_for_today(username):
-    df = load_visits()
-    today_str = date.today().isoformat()
-    df_u = df[(df["Username"] == username) & (df["Date"] == today_str)]
-    if df_u.empty:
-        return None
-    last = df_u.iloc[-1]
-    try:
-        return float(last["Latitude"]), float(last["Longitude"])
-    except Exception:
-        return None
 
 def get_today_user_df(username):
     df = load_visits()
@@ -91,7 +92,6 @@ def reset_punch_form_state():
         if k in st.session_state:
             del st.session_state[k]
 
-# Fallback random location (used only if GEO not available and user doesn’t enter coords)
 def random_location():
     return (random.uniform(8.0, 13.0), random.uniform(77.0, 80.5))
 
@@ -155,7 +155,7 @@ if menu == "Register" and not st.session_state.logged_in:
         else:
             # New registration
             if username in users["username"].values:
-                st.error(⚠️ Username already exists.")
+                st.error("⚠️ Username already exists.")
             elif not password:
                 st.error("⚠️ Please enter a password for new user")
             else:
