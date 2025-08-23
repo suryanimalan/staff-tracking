@@ -21,7 +21,6 @@ except Exception:
 # st.set_page_config(page_title="Staff Tracker", layout="wide")
 USER_FILE = "users.csv"
 VISITS_FILE = "visits.csv"
-API_URL = "http://127.0.0.1:8000/send_location"   # 🔥 FastAPI endpoint
 
 # ==================== UTIL / INIT ====================
 def ensure_files():
