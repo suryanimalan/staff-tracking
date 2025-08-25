@@ -418,26 +418,45 @@ if st.button("Clock Out", key="staff_clockout"):
 
 # ---------------- TODAY'S TRAVEL MAP ----------------
 st.subheader("🗺️ Today's Travel Map")
-today_map_df = get_today_user_df(username).dropna(subset=["Latitude", "Longitude"])
+today_map_df = get_today_user_df(username)
+
 if not today_map_df.empty:
-    lat_mean = today_map_df["Latitude"].mean()
-    lon_mean = today_map_df["Longitude"].mean()
-    m = folium.Map(location=[lat_mean, lon_mean], zoom_start=12)
+    # Ensure numeric coordinates
+    today_map_df = today_map_df[pd.to_numeric(today_map_df["Latitude"], errors="coerce").notna()]
+    today_map_df = today_map_df[pd.to_numeric(today_map_df["Longitude"], errors="coerce").notna()]
+    today_map_df["Latitude"] = today_map_df["Latitude"].astype(float)
+    today_map_df["Longitude"] = today_map_df["Longitude"].astype(float)
 
-    coords = list(zip(today_map_df["Latitude"], today_map_df["Longitude"]))
-    for _, row in today_map_df.iterrows():
-        popup_txt = []
-        if "CustomerName" in row and row["CustomerName"]:
-            popup_txt.append(str(row["CustomerName"]))
-        folium.CircleMarker(
-            location=[row["Latitude"], row["Longitude"]],
-            radius=5, color="blue", fill=True, fill_color="blue",
-            popup="<br>".join(popup_txt)
-        ).add_to(m)
+    if not today_map_df.empty:
+        lat_mean = today_map_df["Latitude"].mean()
+        lon_mean = today_map_df["Longitude"].mean()
+        m = folium.Map(location=[lat_mean, lon_mean], zoom_start=12)
 
-    if len(coords) > 1:
-        folium.PolyLine(coords, color="red", weight=3, opacity=0.7).add_to(m)
+        coords = list(zip(today_map_df["Latitude"], today_map_df["Longitude"]))
+        for _, row in today_map_df.iterrows():
+            popup_txt = []
+            if row.get("RecordType"):
+                popup_txt.append(f"Type: {row['RecordType']}")
+            if row.get("CustomerName"):
+                popup_txt.append(f"Customer: {row['CustomerName']}")
+            if row.get("ClockInTime"):
+                popup_txt.append(f"ClockIn: {row['ClockInTime']}")
+            if row.get("PunchInTime"):
+                popup_txt.append(f"PunchIn: {row['PunchInTime']}")
+            if row.get("ClockOutTime"):
+                popup_txt.append(f"ClockOut: {row['ClockOutTime']}")
 
-    st_folium(m, width=700, height=500)
+            folium.CircleMarker(
+                location=[row["Latitude"], row["Longitude"]],
+                radius=6, color="blue", fill=True, fill_color="blue",
+                popup="<br>".join(popup_txt)
+            ).add_to(m)
+
+        if len(coords) > 1:
+            folium.PolyLine(coords, color="red", weight=3, opacity=0.7).add_to(m)
+
+        st_folium(m, width=700, height=500)
+    else:
+        st.warning("⚠️ No valid coordinates found for today")
 else:
     st.warning("⚠️ No location data for today yet")
