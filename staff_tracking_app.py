@@ -1,4 +1,4 @@
-import streamlit as st 
+import streamlit as st
 import pandas as pd
 import folium
 from folium.plugins import MarkerCluster
@@ -7,7 +7,7 @@ from datetime import datetime, date
 from geopy.distance import geodesic
 import os
 
-# Try to get real GPS location
+# Try to get real GPS location for mobile staff
 try:
     from streamlit_js_eval import get_geolocation
     GEO_AVAILABLE = True
@@ -21,17 +21,19 @@ def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-        for col in ["km_travelled", "collection_amount", "customer_name", "product"]:
+        # Ensure numeric columns exist
+        for col in ["lat","lon","km_travelled","collection_amount"]:
             if col not in df.columns:
-                if col in ["customer_name", "product"]:
-                    df[col] = ""
-                else:
-                    df[col] = 0.0
+                df[col] = 0.0
+        # Ensure text columns exist
+        for col in ["customer_name","product"]:
+            if col not in df.columns:
+                df[col] = ""
         return df
     else:
         return pd.DataFrame(columns=[
-            "username", "role", "action", "lat", "lon", "timestamp",
-            "km_travelled", "collection_amount", "customer_name", "product"
+            "username","role","action","lat","lon","timestamp",
+            "km_travelled","collection_amount","customer_name","product"
         ])
 
 def save_data(df):
@@ -61,20 +63,25 @@ def login():
 def staff_dashboard(username):
     st.sidebar.title(f"👤 Staff: {username}")
     st.title("🧑‍💼 Staff Dashboard")
-
+    
     df = load_data()
-
+    
+    # --- Get GPS automatically ---
+    lat, lon = 0.0, 0.0
     if GEO_AVAILABLE:
-        loc = get_geolocation()
-        lat, lon = None, None
-        if loc and "coords" in loc:
-            lat = loc["coords"]["latitude"]
-            lon = loc["coords"]["longitude"]
+        try:
+            loc = get_geolocation()
+            if loc and "coords" in loc:
+                lat = loc["coords"].get("latitude", 0.0)
+                lon = loc["coords"].get("longitude", 0.0)
+            else:
+                st.warning("Could not get GPS automatically yet. Please allow location access in your browser.")
+        except Exception as e:
+            st.warning(f"Automatic GPS failed: {e}")
     else:
-        lat = st.number_input("Latitude", value=0.0)
-        lon = st.number_input("Longitude", value=0.0)
+        st.warning("GPS not available. Please open on a supported mobile browser.")
 
-    # --- Helper to calculate KM travelled ---
+    # Helper to calculate KM travelled
     def calculate_km(df, username, lat, lon):
         user_data = df[df["username"] == username]
         if user_data.empty:
@@ -82,15 +89,13 @@ def staff_dashboard(username):
         last_row = user_data.iloc[-1]
         if pd.isna(last_row["lat"]) or pd.isna(last_row["lon"]):
             return 0.0
-        prev_point = (last_row["lat"], last_row["lon"])
-        curr_point = (lat, lon)
-        return geodesic(prev_point, curr_point).km
+        return geodesic((last_row["lat"], last_row["lon"]), (lat, lon)).km
 
     # Today's Data
     today_data = df[(df["username"] == username) &
                     (df["timestamp"].dt.date == datetime.now().date())]
 
-    # ✅ Daily Summary at top
+    # Daily Summary
     if not today_data.empty:
         total_km = today_data["km_travelled"].sum()
         total_collection = today_data["collection_amount"].sum()
@@ -107,7 +112,7 @@ def staff_dashboard(username):
         save_data(df)
         st.success("Punched In successfully ✅")
 
-    # Clock In
+    # Clock In / Collection
     st.subheader("💰 Collection Entry")
     customer_name = st.text_input("Customer Name")
     product = st.text_input("Product")
@@ -130,40 +135,47 @@ def staff_dashboard(username):
         save_data(df)
         st.success("Clocked Out successfully ✅")
 
-    # Today's Map
+    # Map
     st.subheader("📌 Today's Travel Map")
     if today_data.empty:
         st.warning("No location data for today yet.")
     else:
-        m = folium.Map(location=[today_data.iloc[-1]["lat"], today_data.iloc[-1]["lon"]], zoom_start=12)
-        marker_cluster = MarkerCluster().add_to(m)
-        for _, row in today_data.iterrows():
-            popup_text = (f"{row['action']} @ {row['timestamp']} | "
-                          f"KM: {row['km_travelled']:.2f} | "
-                          f"Customer: {row['customer_name']} | "
-                          f"Product: {row['product']} | "
-                          f"Collection: ₹{row['collection_amount']}")
-            folium.Marker([row["lat"], row["lon"]], popup=popup_text).add_to(marker_cluster)
-        st_folium(m, width=700, height=500)
+        # Filter valid coordinates
+        map_data = today_data.dropna(subset=["lat","lon"])
+        map_data = map_data[(map_data["lat"]!=0) & (map_data["lon"]!=0)]
+        if not map_data.empty:
+            m = folium.Map(location=[map_data.iloc[-1]["lat"], map_data.iloc[-1]["lon"]], zoom_start=12)
+            marker_cluster = MarkerCluster().add_to(m)
+            for _, row in map_data.iterrows():
+                popup_text = (f"{row['action']} @ {row['timestamp']} | "
+                              f"KM: {row['km_travelled']:.2f} | "
+                              f"Customer: {row['customer_name']} | "
+                              f"Product: {row['product']} | "
+                              f"Collection: ₹{row['collection_amount']}")
+                folium.Marker([row["lat"], row["lon"]], popup=popup_text).add_to(marker_cluster)
+            st_folium(m, width=350, height=500)  # mobile-friendly
+        else:
+            st.warning("No valid location data to display on map.")
 
 # ------------------ ADMIN DASHBOARD ------------------
 def admin_dashboard():
     st.sidebar.title("🛠️ Admin Panel")
     st.title("📊 Admin Dashboard")
-
+    
     df = load_data()
-
     if df.empty:
         st.warning("No staff data available yet.")
         return
 
+    # Ensure numeric lat/lon
+    df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+    df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
+
     # Filters
-    st.subheader("🔎 Filter Data")
     selected_date = st.date_input("Select Date", value=date.today())
     staff_list = ["All"] + sorted(df["username"].unique().tolist())
     selected_staff = st.selectbox("Select Staff", staff_list)
 
-    # Apply filters
     filtered_df = df[df["timestamp"].dt.date == selected_date]
     if selected_staff != "All":
         filtered_df = filtered_df[filtered_df["username"] == selected_staff]
@@ -172,12 +184,11 @@ def admin_dashboard():
         st.warning("No data available for selected filters.")
         return
 
-    # ✅ Daily Totals Table
+    # Daily Totals
     summary = filtered_df.groupby("username").agg(
         Total_KM=("km_travelled", "sum"),
         Total_Collection=("collection_amount", "sum")
     ).reset_index()
-
     st.subheader("📊 Daily Totals per Staff")
     st.dataframe(summary)
 
@@ -187,16 +198,21 @@ def admin_dashboard():
 
     # Map
     st.subheader("🌍 Staff Travel Map")
-    m = folium.Map(location=[20.5937, 78.9629], zoom_start=5)
-    marker_cluster = MarkerCluster().add_to(m)
-    for _, row in filtered_df.iterrows():
-        popup_text = (f"{row['username']} - {row['action']} @ {row['timestamp']} | "
-                      f"KM: {row['km_travelled']:.2f} | "
-                      f"Customer: {row['customer_name']} | "
-                      f"Product: {row['product']} | "
-                      f"Collection: ₹{row['collection_amount']}")
-        folium.Marker([row["lat"], row["lon"]], popup=popup_text).add_to(marker_cluster)
-    st_folium(m, width=700, height=500)
+    valid_data = filtered_df.dropna(subset=["lat","lon"])
+    valid_data = valid_data[(valid_data["lat"]!=0) & (valid_data["lon"]!=0)]
+    if not valid_data.empty:
+        m = folium.Map(location=[valid_data.iloc[-1]["lat"], valid_data.iloc[-1]["lon"]], zoom_start=5)
+        marker_cluster = MarkerCluster().add_to(m)
+        for _, row in valid_data.iterrows():
+            popup_text = (f"{row['username']} - {row['action']} @ {row['timestamp']} | "
+                          f"KM: {row['km_travelled']:.2f} | "
+                          f"Customer: {row['customer_name']} | "
+                          f"Product: {row['product']} | "
+                          f"Collection: ₹{row['collection_amount']}")
+            folium.Marker([row["lat"], row["lon"]], popup=popup_text).add_to(marker_cluster)
+        st_folium(m, width=350, height=500)  # mobile-friendly
+    else:
+        st.warning("No valid location data to display on map.")
 
 # ------------------ MAIN ------------------
 def main():
